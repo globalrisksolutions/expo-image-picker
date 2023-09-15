@@ -7,6 +7,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
@@ -141,14 +142,21 @@ class ImagePickerModule(
     }
 
     val permissionsResponseHandler = PermissionsResponseListener { permissionsResponse: Map<String, PermissionsResponse> ->
-      if (permissionsResponse[Manifest.permission.WRITE_EXTERNAL_STORAGE]?.status == PermissionsStatus.GRANTED &&
-        permissionsResponse[Manifest.permission.CAMERA]?.status == PermissionsStatus.GRANTED
-      ) {
-        launchCameraWithPermissionsGranted(promise, cameraIntent, pickerOptions)
-      } else {
-        promise.reject(SecurityException("User rejected permissions"))
+       if (Build.VERSION.SDK_INT >= 33) {
+          if (permissionsResponse[Manifest.permission.CAMERA]?.status == PermissionsStatus.GRANTED) {
+             launchCameraWithPermissionsGranted(promise, cameraIntent, pickerOptions)
+          } else {
+            promise.reject(SecurityException("User rejected permissions"))
+          }
+        } else if (
+          permissionsResponse[Manifest.permission.WRITE_EXTERNAL_STORAGE]?.status == PermissionsStatus.GRANTED &&
+          permissionsResponse[Manifest.permission.CAMERA]?.status == PermissionsStatus.GRANTED
+        ) {
+          launchCameraWithPermissionsGranted(promise, cameraIntent, pickerOptions)
+        } else {
+          promise.reject(SecurityException("User rejected permissions"))
+        }
       }
-    }
 
     mPermissions.askForPermissions(permissionsResponseHandler, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.CAMERA)
   }
@@ -178,12 +186,16 @@ class ImagePickerModule(
 
   //region helpers
 
-  private fun getMediaLibraryPermissions(writeOnly: Boolean): Array<String> {
+   private fun getMediaLibraryPermissions(writeOnly: Boolean): Array<String> {
     return if (writeOnly) {
-      arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-    } else {
-      arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE)
-    }
+        arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+      } else {
+        if(Build.VERSION.SDK_INT >= 33){
+          arrayOf("android.permission.READ_MEDIA_IMAGES")
+        } else {
+          arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE)
+        }      
+      }  
   }
 
   private fun launchCameraWithPermissionsGranted(promise: Promise, cameraIntent: Intent, pickerOptions: ImagePickerOptions) {
